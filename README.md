@@ -11,7 +11,7 @@ Wiegand protocol receiver.
 ## Installation
 
 ```sh
-idf.py add-dependency "esp-idf-lib/wiegand^1.1.0
+idf.py add-dependency esp-idf-lib/wiegand^1.1.0
 ```
 
 ## Support

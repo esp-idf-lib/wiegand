@@ -116,8 +116,8 @@ static void timer_handler(void *arg)
 ////////////////////////////////////////////////////////////////////////////////
 
 esp_err_t wiegand_reader_init(wiegand_reader_t *reader, gpio_num_t gpio_d0, gpio_num_t gpio_d1,
-        bool internal_pullups, size_t buf_size, wiegand_callback_t callback, wiegand_order_t bit_order,
-        wiegand_order_t byte_order)
+                              bool internal_pullups, size_t buf_size, wiegand_callback_t callback, wiegand_order_t bit_order,
+                              wiegand_order_t byte_order)
 {
     CHECK_ARG(reader && buf_size && callback);
 
@@ -134,7 +134,8 @@ esp_err_t wiegand_reader_init(wiegand_reader_t *reader, gpio_num_t gpio_d0, gpio
     reader->byte_order = byte_order;
     reader->callback = callback;
 
-    esp_timer_create_args_t timer_args = {
+    esp_timer_create_args_t timer_args =
+    {
         .name = TAG,
         .arg = reader,
         .callback = timer_handler,

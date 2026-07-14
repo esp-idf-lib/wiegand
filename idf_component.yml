@@ -1,7 +1,7 @@
 ---
-version: 1.2.0
+version: 1.2.1
 description: Wiegand protocol receiver
-license: BSD-3
+license: BSD-3-clause
 targets:
   - esp32
   - esp32c2

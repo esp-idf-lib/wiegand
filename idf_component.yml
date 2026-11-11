@@ -1,7 +1,7 @@
 ---
 version: 1.2.2
 description: Wiegand protocol receiver
-license: BSD-3-clause
+license: BSD-3-Clause
 dependencies:
   esp-idf-lib/esp_idf_lib_helpers:
     version: "*"

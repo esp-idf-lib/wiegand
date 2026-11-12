@@ -92,6 +92,8 @@ struct wiegand_reader
     volatile size_t bits;                  //!< Bits in the current frame, internal
     esp_timer_handle_t timer;              //!< Frame timeout timer, internal
     volatile bool enabled;                 //!< Reception state, internal
+    SemaphoreHandle_t released;            //!< Release handshake, internal
+    volatile bool releasing;               //!< Release state, internal
 };
 
 /**
@@ -178,12 +180,17 @@ esp_err_t wiegand_reader_enable(wiegand_reader_t *reader);
  *
  * Must not be called from the callback.
  *
+ * The frame timer is deleted by the esp_timer task, so the descriptor stays
+ * valid until the timer is gone. If that task does not respond, the reader stays
+ * initialized and the call can be repeated.
+ *
  * @param reader Reader descriptor
  * @return
  *      - `ESP_OK` on success
  *      - `ESP_ERR_INVALID_ARG` if @p reader is NULL
- *      - `ESP_ERR_INVALID_STATE` if the reader is not initialized
- *      - error code from the GPIO or esp_timer driver otherwise
+ *      - `ESP_ERR_INVALID_STATE` if the reader is not initialized or the frame
+ *        timer could not be deleted
+ *      - error code from the GPIO driver otherwise
  */
 esp_err_t wiegand_reader_done(wiegand_reader_t *reader);
 

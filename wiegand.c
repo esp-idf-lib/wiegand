@@ -38,11 +38,17 @@
 #include <string.h>
 #include <stdlib.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include "wiegand.h"
 
 static const char *TAG = "wiegand";
 
 #define TIMER_INTERVAL_US 50000 // 50ms
+// esp_timer_delete() must not be called while the callback may use the reader,
+// so the reader asks the timer task to delete the timer: the request is a
+// one-shot timer that fires almost immediately
+#define RELEASE_DELAY_US 100
+#define RELEASE_TIMEOUT_MS 100
 
 #define CHECK(x) do { esp_err_t __; if ((__ = x) != ESP_OK) return __; } while (0)
 #define CHECK_ARG(VAL) do { if (!(VAL)) return ESP_ERR_INVALID_ARG; } while (0)
@@ -52,6 +58,24 @@ static const char *TAG = "wiegand";
 // instead of reporting an error
 static portMUX_TYPE pins_lock = portMUX_INITIALIZER_UNLOCKED;
 static bool pins_busy[GPIO_NUM_MAX];
+
+// The ISR service is global, so it is installed once and never removed
+static bool isr_service_ready;
+
+static esp_err_t isr_service_install(void)
+{
+    if (isr_service_ready)
+        return ESP_OK;
+
+    esp_err_t res = gpio_install_isr_service(0);
+    // Already installed, e.g. by the application
+    if (res == ESP_ERR_INVALID_STATE)
+        res = ESP_OK;
+
+    isr_service_ready = res == ESP_OK;
+
+    return res;
+}
 
 static bool pins_acquire(gpio_num_t d0, gpio_num_t d1)
 {
@@ -128,6 +152,21 @@ static void timer_handler(void *arg)
 {
     wiegand_reader_t *reader = (wiegand_reader_t *)arg;
 
+    // Called to delete the timer: done() waits for us
+    if (reader->releasing)
+    {
+        esp_timer_stop(reader->timer);
+        esp_err_t res = esp_timer_delete(reader->timer);
+        if (res != ESP_OK)
+            ESP_LOGE(TAG, "Could not delete the timer: %s", esp_err_to_name(res));
+        else
+            reader->timer = NULL;
+
+        xSemaphoreGive(reader->released);
+
+        return;
+    }
+
     // The reader could be released already
     if (!reader->buf)
         return;
@@ -173,8 +212,8 @@ esp_err_t wiegand_reader_init(wiegand_reader_t *reader, gpio_num_t gpio_d0, gpio
         return ESP_ERR_INVALID_STATE;
     }
 
-    esp_err_t res = gpio_install_isr_service(0);
-    if (res != ESP_OK && res != ESP_ERR_INVALID_STATE)
+    esp_err_t res = isr_service_install();
+    if (res != ESP_OK)
         goto fail_release;
 
     reader->buf = calloc(buf_size, 1);
@@ -182,6 +221,13 @@ esp_err_t wiegand_reader_init(wiegand_reader_t *reader, gpio_num_t gpio_d0, gpio
     {
         res = ESP_ERR_NO_MEM;
         goto fail_release;
+    }
+
+    reader->released = xSemaphoreCreateBinary();
+    if (!reader->released)
+    {
+        res = ESP_ERR_NO_MEM;
+        goto fail_buf;
     }
 
     esp_timer_create_args_t timer_args =
@@ -193,7 +239,7 @@ esp_err_t wiegand_reader_init(wiegand_reader_t *reader, gpio_num_t gpio_d0, gpio
     };
     res = esp_timer_create(&timer_args, &reader->timer);
     if (res != ESP_OK)
-        goto fail_buf;
+        goto fail_sem;
 
     res = gpio_set_direction(gpio_d0, GPIO_MODE_INPUT);
     if (res != ESP_OK)
@@ -228,6 +274,9 @@ fail_d0:
 fail_timer:
     esp_timer_delete(reader->timer);
     reader->timer = NULL;
+fail_sem:
+    vSemaphoreDelete(reader->released);
+    reader->released = NULL;
 fail_buf:
     free(reader->buf);
     reader->buf = NULL;
@@ -283,13 +332,27 @@ esp_err_t wiegand_reader_done(wiegand_reader_t *reader)
     CHECK(gpio_isr_handler_remove(d0));
     CHECK(gpio_isr_handler_remove(d1));
     esp_timer_stop(reader->timer);
-    CHECK(esp_timer_delete(reader->timer));
+
+    // Let the timer task delete the timer: esp_timer_delete() fails while the
+    // timer is armed, and the handler must not run after the reader is freed
+    reader->releasing = true;
+    esp_err_t res = esp_timer_start_once(reader->timer, RELEASE_DELAY_US);
+    if (res == ESP_OK)
+        xSemaphoreTake(reader->released, pdMS_TO_TICKS(RELEASE_TIMEOUT_MS));
+
+    reader->releasing = false;
+    if (reader->timer)
+    {
+        ESP_LOGE(TAG, "Could not release the frame timer of the reader on D0=%d, D1=%d", d0, d1);
+        return ESP_ERR_INVALID_STATE;
+    }
 
     reader->enabled = false;
-    reader->timer = NULL;
     free(reader->buf);
     reader->buf = NULL;
     reader->bits = 0;
+    vSemaphoreDelete(reader->released);
+    reader->released = NULL;
     pins_release(d0, d1);
 
     ESP_LOGD(TAG, "Reader removed");

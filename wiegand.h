@@ -114,6 +114,10 @@ struct wiegand_reader
  * - `WIEGAND_MSB_FIRST` bit order packs the first received bit into the most
  *   significant bit of a byte, `WIEGAND_LSB_FIRST` into the least significant.
  *
+ * A frame longer than `buf_size * 8` bits is truncated: the extra pulses are
+ * ignored, so a truncated frame is indistinguishable from a complete one except
+ * by its length in bits.
+ *
  * @param reader           Reader descriptor
  * @param gpio_d0          GPIO pin for D0
  * @param gpio_d1          GPIO pin for D0

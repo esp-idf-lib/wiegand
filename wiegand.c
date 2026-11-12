@@ -97,15 +97,24 @@ static void timer_handler(void *arg)
 {
     wiegand_reader_t *reader = (wiegand_reader_t *)arg;
 
+    // The reader could be released already
+    if (!reader->buf)
+        return;
+
     ESP_LOGD(TAG, "Got %d bits of data", reader->bits);
 
-    wiegand_reader_disable(reader);
+    isr_disable(reader);
+    esp_timer_stop(reader->timer);
 
     if (reader->callback)
         reader->callback(reader);
 
-    wiegand_reader_enable(reader);
+    // The callback may have stopped or released the reader
+    if (!reader->enabled || !reader->buf)
+        return;
 
+    reader->bits = 0;
+    memset(reader->buf, 0, reader->size);
     isr_enable(reader);
 }
 

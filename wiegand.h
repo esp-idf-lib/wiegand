@@ -61,20 +61,24 @@ typedef enum
 } wiegand_order_t;
 
 /**
- * Wiegand reader descriptor
+ * @brief Wiegand reader descriptor
+ *
+ * Fields marked as internal are maintained by the driver. The descriptor must
+ * stay alive until @ref wiegand_reader_done() is called.
  */
 struct wiegand_reader
 {
-    gpio_num_t gpio_d0, gpio_d1;
-    wiegand_callback_t callback;
-    wiegand_order_t bit_order;
-    wiegand_order_t byte_order;
+    gpio_num_t gpio_d0;                    //!< D0 line, set by wiegand_reader_init()
+    gpio_num_t gpio_d1;                    //!< D1 line, set by wiegand_reader_init()
+    wiegand_callback_t callback;           //!< Frame callback, set by wiegand_reader_init()
+    wiegand_order_t bit_order;             //!< Bit order, set by wiegand_reader_init()
+    wiegand_order_t byte_order;            //!< Byte order, set by wiegand_reader_init()
 
-    uint8_t *buf;
-    size_t size;
-    volatile size_t bits;
-    esp_timer_handle_t timer;
-    volatile bool enabled;
+    uint8_t *buf;                          //!< Frame buffer, allocated by wiegand_reader_init()
+    size_t size;                           //!< Frame buffer size in bytes, set by wiegand_reader_init()
+    volatile size_t bits;                  //!< Bits in the current frame, internal
+    esp_timer_handle_t timer;              //!< Frame timeout timer, internal
+    volatile bool enabled;                 //!< Reception state, internal
 };
 
 /**
@@ -83,6 +87,15 @@ struct wiegand_reader
  * Both lines must be usable and not used by another reader of this driver; the
  * driver keeps track of D0/D1 it has taken and returns `ESP_ERR_INVALID_STATE`
  * if the lines are busy. Lines occupied by other drivers are not detected.
+ *
+ * Buffer layout:
+ *
+ * - `WIEGAND_MSB_FIRST` byte order fills the buffer from its end, so the frame
+ *   is right-aligned: `buf[buf_size - 1]` is the last byte of the frame;
+ * - `WIEGAND_LSB_FIRST` byte order fills the buffer from its beginning:
+ *   `buf[0]` is the first byte of the frame;
+ * - `WIEGAND_MSB_FIRST` bit order packs the first received bit into the most
+ *   significant bit of a byte, `WIEGAND_LSB_FIRST` into the least significant.
  *
  * @param reader           Reader descriptor
  * @param gpio_d0          GPIO pin for D0

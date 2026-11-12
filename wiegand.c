@@ -132,7 +132,7 @@ static void timer_handler(void *arg)
     if (!reader->buf)
         return;
 
-    ESP_LOGD(TAG, "Got %d bits of data", reader->bits);
+    ESP_LOGD(TAG, "Got %zu bits of data", reader->bits);
 
     isr_disable(reader);
     esp_timer_stop(reader->timer);

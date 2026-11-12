@@ -49,6 +49,19 @@ extern "C" {
 
 typedef struct wiegand_reader wiegand_reader_t;
 
+/**
+ * @brief Data reception callback
+ *
+ * Called from a task, not from an interrupt, when a frame is complete, that is
+ * when no pulse arrived for 50 ms. The frame is in @ref wiegand_reader_t::buf,
+ * its length in bits in @ref wiegand_reader_t::bits.
+ *
+ * Data received while the callback runs is lost, reception is disabled for the
+ * duration of the call. The callback may call @ref wiegand_reader_disable() to
+ * stop reception, but it must not call @ref wiegand_reader_done().
+ *
+ * @param reader Reader descriptor
+ */
 typedef void (*wiegand_callback_t)(wiegand_reader_t *reader);
 
 /**
@@ -87,6 +100,10 @@ struct wiegand_reader
  * Both lines must be usable and not used by another reader of this driver; the
  * driver keeps track of D0/D1 it has taken and returns `ESP_ERR_INVALID_STATE`
  * if the lines are busy. Lines occupied by other drivers are not detected.
+ *
+ * A frame ends when no pulse arrives for 50 ms, then @ref wiegand_callback_t is
+ * called with the frame in @ref wiegand_reader_t::buf and its length in bits in
+ * @ref wiegand_reader_t::bits.
  *
  * Buffer layout:
  *

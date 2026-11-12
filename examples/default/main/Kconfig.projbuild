@@ -5,20 +5,28 @@ menu "Example configuration"
         default 4 if IDF_TARGET_ESP32C2 || IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32C5 || IDF_TARGET_ESP32C6 || IDF_TARGET_ESP32C61
         default 4 if IDF_TARGET_ESP32H2
         default 4 if IDF_TARGET_ESP32P4
+        default 18 if IDF_TARGET_ESP32 && SPIRAM
         default 16 if IDF_TARGET_ESP32 || IDF_TARGET_ESP32S2 || IDF_TARGET_ESP32S3
         default 16
         help
-            GPIO number for D0 Wiegand line
+            GPIO number for D0 Wiegand line.
+
+            GPIO16 and GPIO17 are connected to the PSRAM on ESP32 modules with
+            PSRAM, so GPIO18 and GPIO19 are used there instead.
 
     config EXAMPLE_D1_GPIO
         int "D1 GPIO number"
         default 5 if IDF_TARGET_ESP32C2 || IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32C5 || IDF_TARGET_ESP32C6 || IDF_TARGET_ESP32C61
         default 5 if IDF_TARGET_ESP32H2
         default 5 if IDF_TARGET_ESP32P4
+        default 19 if IDF_TARGET_ESP32 && SPIRAM
         default 17 if IDF_TARGET_ESP32 || IDF_TARGET_ESP32S2 || IDF_TARGET_ESP32S3
         default 17
         help
-            GPIO number for D1 Wiegand line
+            GPIO number for D1 Wiegand line.
+
+            GPIO16 and GPIO17 are connected to the PSRAM on ESP32 modules with
+            PSRAM, so GPIO18 and GPIO19 are used there instead.
 
     config EXAMPLE_BUF_SIZE
         int "Buffer size, bytes"

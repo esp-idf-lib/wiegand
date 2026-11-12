@@ -72,10 +72,10 @@ struct wiegand_reader
 
     uint8_t *buf;
     size_t size;
-    size_t bits;
+    volatile size_t bits;
     esp_timer_handle_t timer;
     bool start_parity;
-    bool enabled;
+    volatile bool enabled;
 };
 
 /**

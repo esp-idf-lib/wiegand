@@ -120,7 +120,7 @@ struct wiegand_reader
  *
  * @param reader           Reader descriptor
  * @param gpio_d0          GPIO pin for D0
- * @param gpio_d1          GPIO pin for D0
+ * @param gpio_d1          GPIO pin for D1, must differ from @p gpio_d0
  * @param internal_pullups Enable internal pull-up resistors for D0 and D1 GPIO
  * @param buf_size         Reader buffer size in bytes, must be large enough to
  *                         contain entire Wiegand key

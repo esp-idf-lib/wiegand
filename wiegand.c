@@ -241,6 +241,8 @@ fail_release:
 esp_err_t wiegand_reader_disable(wiegand_reader_t *reader)
 {
     CHECK_ARG(reader);
+    if (!reader->timer || !reader->buf)
+        return ESP_ERR_INVALID_STATE;
 
     isr_disable(reader);
     esp_timer_stop(reader->timer);
@@ -254,6 +256,8 @@ esp_err_t wiegand_reader_disable(wiegand_reader_t *reader)
 esp_err_t wiegand_reader_enable(wiegand_reader_t *reader)
 {
     CHECK_ARG(reader);
+    if (!reader->timer || !reader->buf)
+        return ESP_ERR_INVALID_STATE;
 
     reader->bits = 0;
     memset(reader->buf, 0, reader->size);
@@ -268,7 +272,9 @@ esp_err_t wiegand_reader_enable(wiegand_reader_t *reader)
 
 esp_err_t wiegand_reader_done(wiegand_reader_t *reader)
 {
-    CHECK_ARG(reader && reader->buf);
+    CHECK_ARG(reader);
+    if (!reader->timer || !reader->buf)
+        return ESP_ERR_INVALID_STATE;
 
     gpio_num_t d0 = reader->gpio_d0;
     gpio_num_t d1 = reader->gpio_d1;
@@ -278,7 +284,12 @@ esp_err_t wiegand_reader_done(wiegand_reader_t *reader)
     CHECK(gpio_isr_handler_remove(d1));
     esp_timer_stop(reader->timer);
     CHECK(esp_timer_delete(reader->timer));
+
+    reader->enabled = false;
+    reader->timer = NULL;
     free(reader->buf);
+    reader->buf = NULL;
+    reader->bits = 0;
     pins_release(d0, d1);
 
     ESP_LOGD(TAG, "Reader removed");

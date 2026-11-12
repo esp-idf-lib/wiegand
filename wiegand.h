@@ -108,26 +108,48 @@ esp_err_t wiegand_reader_init(wiegand_reader_t *reader, gpio_num_t gpio_d0, gpio
 /**
  * @brief Disable reader
  *
- * While reader is disabled, it will not receive new data
+ * While reader is disabled, it will not receive new data. A frame that is being
+ * received is dropped.
+ *
+ * May be called from the callback.
  *
  * @param reader Reader descriptor
- * @return `ESP_OK` on success
+ * @return
+ *      - `ESP_OK` on success
+ *      - `ESP_ERR_INVALID_ARG` if @p reader is NULL
+ *      - `ESP_ERR_INVALID_STATE` if the reader is not initialized
  */
 esp_err_t wiegand_reader_disable(wiegand_reader_t *reader);
 
 /**
  * @brief Enable reader
  *
+ * Clears the frame buffer and the bit counter, so the frame received before is
+ * lost.
+ *
  * @param reader Reader descriptor
- * @return `ESP_OK` on success
+ * @return
+ *      - `ESP_OK` on success
+ *      - `ESP_ERR_INVALID_ARG` if @p reader is NULL
+ *      - `ESP_ERR_INVALID_STATE` if the reader is not initialized
  */
 esp_err_t wiegand_reader_enable(wiegand_reader_t *reader);
 
 /**
  * @brief Delete reader instance.
  *
+ * Releases the GPIO lines, so they can be used again. The descriptor is left in
+ * the uninitialized state: any call except @ref wiegand_reader_init() returns
+ * `ESP_ERR_INVALID_STATE`.
+ *
+ * Must not be called from the callback.
+ *
  * @param reader Reader descriptor
- * @return `ESP_OK` on success
+ * @return
+ *      - `ESP_OK` on success
+ *      - `ESP_ERR_INVALID_ARG` if @p reader is NULL
+ *      - `ESP_ERR_INVALID_STATE` if the reader is not initialized
+ *      - error code from the GPIO or esp_timer driver otherwise
  */
 esp_err_t wiegand_reader_done(wiegand_reader_t *reader);
 

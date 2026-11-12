@@ -37,6 +37,7 @@
 #include <esp_log.h>
 #include <string.h>
 #include <stdlib.h>
+#include <freertos/FreeRTOS.h>
 #include "wiegand.h"
 
 static const char *TAG = "wiegand";
@@ -45,6 +46,36 @@ static const char *TAG = "wiegand";
 
 #define CHECK(x) do { esp_err_t __; if ((__ = x) != ESP_OK) return __; } while (0)
 #define CHECK_ARG(VAL) do { if (!(VAL)) return ESP_ERR_INVALID_ARG; } while (0)
+
+// D0 and D1 lines are tracked here: the GPIO driver silently replaces the ISR
+// handler of a pin, so a second reader on the same line would steal interrupts
+// instead of reporting an error
+static portMUX_TYPE pins_lock = portMUX_INITIALIZER_UNLOCKED;
+static bool pins_busy[GPIO_NUM_MAX];
+
+static bool pins_acquire(gpio_num_t d0, gpio_num_t d1)
+{
+    bool acquired = false;
+
+    portENTER_CRITICAL(&pins_lock);
+    if (!pins_busy[d0] && !pins_busy[d1])
+    {
+        pins_busy[d0] = true;
+        pins_busy[d1] = true;
+        acquired = true;
+    }
+    portEXIT_CRITICAL(&pins_lock);
+
+    return acquired;
+}
+
+static void pins_release(gpio_num_t d0, gpio_num_t d1)
+{
+    portENTER_CRITICAL(&pins_lock);
+    pins_busy[d0] = false;
+    pins_busy[d1] = false;
+    portEXIT_CRITICAL(&pins_lock);
+}
 
 static void isr_disable(wiegand_reader_t *reader)
 {
@@ -125,6 +156,8 @@ esp_err_t wiegand_reader_init(wiegand_reader_t *reader, gpio_num_t gpio_d0, gpio
                               wiegand_order_t byte_order)
 {
     CHECK_ARG(reader && buf_size && callback);
+    CHECK_ARG(gpio_d0 != gpio_d1);
+    CHECK_ARG(GPIO_IS_VALID_GPIO(gpio_d0) && GPIO_IS_VALID_GPIO(gpio_d1));
 
     memset(reader, 0, sizeof(wiegand_reader_t));
     reader->gpio_d0 = gpio_d0;
@@ -133,6 +166,12 @@ esp_err_t wiegand_reader_init(wiegand_reader_t *reader, gpio_num_t gpio_d0, gpio
     reader->bit_order = bit_order;
     reader->byte_order = byte_order;
     reader->callback = callback;
+
+    if (!pins_acquire(gpio_d0, gpio_d1))
+    {
+        ESP_LOGE(TAG, "GPIO%d or GPIO%d is already used by another reader", gpio_d0, gpio_d1);
+        return ESP_ERR_INVALID_STATE;
+    }
 
     esp_err_t res = gpio_install_isr_service(0);
     if (res != ESP_OK && res != ESP_ERR_INVALID_STATE)
@@ -193,6 +232,7 @@ fail_buf:
     free(reader->buf);
     reader->buf = NULL;
 fail_release:
+    pins_release(gpio_d0, gpio_d1);
     memset(reader, 0, sizeof(wiegand_reader_t));
 
     return res;
@@ -230,12 +270,16 @@ esp_err_t wiegand_reader_done(wiegand_reader_t *reader)
 {
     CHECK_ARG(reader && reader->buf);
 
+    gpio_num_t d0 = reader->gpio_d0;
+    gpio_num_t d1 = reader->gpio_d1;
+
     isr_disable(reader);
-    CHECK(gpio_isr_handler_remove(reader->gpio_d0));
-    CHECK(gpio_isr_handler_remove(reader->gpio_d1));
+    CHECK(gpio_isr_handler_remove(d0));
+    CHECK(gpio_isr_handler_remove(d1));
     esp_timer_stop(reader->timer);
     CHECK(esp_timer_delete(reader->timer));
     free(reader->buf);
+    pins_release(d0, d1);
 
     ESP_LOGD(TAG, "Reader removed");
 

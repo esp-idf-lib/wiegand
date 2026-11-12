@@ -80,6 +80,10 @@ struct wiegand_reader
 /**
  * @brief Create and initialize reader instance.
  *
+ * Both lines must be usable and not used by another reader of this driver; the
+ * driver keeps track of D0/D1 it has taken and returns `ESP_ERR_INVALID_STATE`
+ * if the lines are busy. Lines occupied by other drivers are not detected.
+ *
  * @param reader           Reader descriptor
  * @param gpio_d0          GPIO pin for D0
  * @param gpio_d1          GPIO pin for D0
@@ -89,7 +93,13 @@ struct wiegand_reader
  * @param callback         Callback function for processing received codes
  * @param bit_order        Bit order of data
  * @param byte_order       Byte order of data
- * @return `ESP_OK` on success
+ * @return
+ *      - `ESP_OK` on success
+ *      - `ESP_ERR_INVALID_ARG` if a pointer is NULL, a pin is not usable or both
+ *        pins are the same
+ *      - `ESP_ERR_INVALID_STATE` if D0 or D1 is already used by another reader
+ *      - `ESP_ERR_NO_MEM` if the frame buffer could not be allocated
+ *      - error code from the GPIO or esp_timer driver otherwise
  */
 esp_err_t wiegand_reader_init(wiegand_reader_t *reader, gpio_num_t gpio_d0, gpio_num_t gpio_d1,
                               bool internal_pullups, size_t buf_size, wiegand_callback_t callback, wiegand_order_t bit_order,

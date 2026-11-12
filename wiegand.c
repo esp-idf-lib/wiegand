@@ -126,18 +126,24 @@ esp_err_t wiegand_reader_init(wiegand_reader_t *reader, gpio_num_t gpio_d0, gpio
 {
     CHECK_ARG(reader && buf_size && callback);
 
-    esp_err_t res = gpio_install_isr_service(0);
-    if (res != ESP_OK && res != ESP_ERR_INVALID_STATE)
-        return res;
-
     memset(reader, 0, sizeof(wiegand_reader_t));
     reader->gpio_d0 = gpio_d0;
     reader->gpio_d1 = gpio_d1;
     reader->size = buf_size;
-    reader->buf = calloc(buf_size, 1);
     reader->bit_order = bit_order;
     reader->byte_order = byte_order;
     reader->callback = callback;
+
+    esp_err_t res = gpio_install_isr_service(0);
+    if (res != ESP_OK && res != ESP_ERR_INVALID_STATE)
+        goto fail_release;
+
+    reader->buf = calloc(buf_size, 1);
+    if (!reader->buf)
+    {
+        res = ESP_ERR_NO_MEM;
+        goto fail_release;
+    }
 
     esp_timer_create_args_t timer_args =
     {
@@ -146,21 +152,50 @@ esp_err_t wiegand_reader_init(wiegand_reader_t *reader, gpio_num_t gpio_d0, gpio
         .callback = timer_handler,
         .dispatch_method = ESP_TIMER_TASK
     };
-    CHECK(esp_timer_create(&timer_args, &reader->timer));
+    res = esp_timer_create(&timer_args, &reader->timer);
+    if (res != ESP_OK)
+        goto fail_buf;
 
-    CHECK(gpio_set_direction(gpio_d0, GPIO_MODE_INPUT));
-    CHECK(gpio_set_direction(gpio_d1, GPIO_MODE_INPUT));
-    CHECK(gpio_set_pull_mode(gpio_d0, internal_pullups ? GPIO_PULLUP_ONLY : GPIO_FLOATING));
-    CHECK(gpio_set_pull_mode(gpio_d1, internal_pullups ? GPIO_PULLUP_ONLY : GPIO_FLOATING));
+    res = gpio_set_direction(gpio_d0, GPIO_MODE_INPUT);
+    if (res != ESP_OK)
+        goto fail_timer;
+    res = gpio_set_direction(gpio_d1, GPIO_MODE_INPUT);
+    if (res != ESP_OK)
+        goto fail_timer;
+    res = gpio_set_pull_mode(gpio_d0, internal_pullups ? GPIO_PULLUP_ONLY : GPIO_FLOATING);
+    if (res != ESP_OK)
+        goto fail_timer;
+    res = gpio_set_pull_mode(gpio_d1, internal_pullups ? GPIO_PULLUP_ONLY : GPIO_FLOATING);
+    if (res != ESP_OK)
+        goto fail_timer;
+
     isr_disable(reader);
-    CHECK(gpio_isr_handler_add(gpio_d0, isr_handler, reader));
-    CHECK(gpio_isr_handler_add(gpio_d1, isr_handler, reader));
+    res = gpio_isr_handler_add(gpio_d0, isr_handler, reader);
+    if (res != ESP_OK)
+        goto fail_timer;
+    res = gpio_isr_handler_add(gpio_d1, isr_handler, reader);
+    if (res != ESP_OK)
+        goto fail_d0;
+
     isr_enable(reader);
     reader->enabled = true;
 
     ESP_LOGD(TAG, "Reader initialized on D0=%d, D1=%d", gpio_d0, gpio_d1);
 
     return ESP_OK;
+
+fail_d0:
+    gpio_isr_handler_remove(gpio_d0);
+fail_timer:
+    esp_timer_delete(reader->timer);
+    reader->timer = NULL;
+fail_buf:
+    free(reader->buf);
+    reader->buf = NULL;
+fail_release:
+    memset(reader, 0, sizeof(wiegand_reader_t));
+
+    return res;
 }
 
 esp_err_t wiegand_reader_disable(wiegand_reader_t *reader)

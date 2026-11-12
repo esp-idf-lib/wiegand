@@ -55,10 +55,10 @@ static void task(void *arg)
 
         // dump received data
         printf("==========================================\n");
-        printf("Bits received: %d\n", p.bits);
+        printf("Bits received: %zu\n", p.bits);
         printf("Received data:");
-        int bytes = p.bits / 8;
-        int tail = p.bits % 8;
+        size_t bytes = p.bits / 8;
+        size_t tail = p.bits % 8;
         for (size_t i = 0; i < bytes + (tail ? 1 : 0); i++)
             printf(" 0x%02x", p.data[i]);
         printf("\n==========================================\n");

@@ -1,5 +1,5 @@
 ---
-version: 1.2.2
+version: 1.3.0
 description: Wiegand protocol receiver
 license: BSD-3-Clause
 dependencies:

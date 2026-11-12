@@ -37,7 +37,6 @@
 #include <esp_log.h>
 #include <string.h>
 #include <stdlib.h>
-#include <esp_idf_lib_helpers.h>
 #include "wiegand.h"
 
 static const char *TAG = "wiegand";
@@ -59,11 +58,8 @@ static void isr_enable(wiegand_reader_t *reader)
     gpio_set_intr_type(reader->gpio_d1, GPIO_INTR_NEGEDGE);
 }
 
-#if HELPER_TARGET_IS_ESP32
-static void IRAM_ATTR isr_handler(void *arg)
-#else
+// Not IRAM_ATTR: the handler calls gpio_get_level(), which is not in IRAM
 static void isr_handler(void *arg)
-#endif
 {
     wiegand_reader_t *reader = (wiegand_reader_t *)arg;
     if (!reader->enabled)

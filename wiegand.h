@@ -74,7 +74,6 @@ struct wiegand_reader
     size_t size;
     volatile size_t bits;
     esp_timer_handle_t timer;
-    bool start_parity;
     volatile bool enabled;
 };
 
